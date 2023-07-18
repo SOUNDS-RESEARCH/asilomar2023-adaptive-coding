@@ -11,7 +11,7 @@ TODO
 - [Install Docker](https://www.docker.com/)
 - Clone this repository: `git clone https://github.com/mbl-sounds/asilomar2023sim`
 - Build the docker image: `docker build -t asilomar2023sim/simulations .`
-- Run the docker image: `docker run -it --rm -v "$(pwd)/.:/docker_py" asilomar2023sim/simulations`
+- Run the docker image: `docker run -it --rm -v "$(pwd)/.:/wd" asilomar2023sim/simulations`
 
 ## SOUNDS
 This research work was carried out at the ESAT Laboratory of KU Leuven and the Section of AI and Sound of Aalborg University, as part of the SOUNDS European Training Network.
