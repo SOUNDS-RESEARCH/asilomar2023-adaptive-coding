@@ -19,4 +19,4 @@ plt.xlabel("Value")
 plt.ylabel("Count")
 plt.title("Normal Distribution")
 
-fig.savefig("data/figure.png")
+fig.savefig("plots/figure.png")
