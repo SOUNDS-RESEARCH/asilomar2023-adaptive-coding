@@ -1,0 +1,1 @@
+This is a placeholder to add this "empty" folder to the file structure.
