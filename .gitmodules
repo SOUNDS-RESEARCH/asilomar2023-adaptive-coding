@@ -1,0 +1,3 @@
+[submodule "pythonutils"]
+	path = pythonutils
+	url = git@github.com:mbl-sounds/pythonutils.git
