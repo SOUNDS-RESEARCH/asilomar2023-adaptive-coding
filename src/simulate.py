@@ -10,26 +10,26 @@ from pythonutils import dockersim
 runs = int(sys.argv[1])
 nprocesses = int(sys.argv[2])
 
-print(f"Running {runs} in {nprocesses} processes.")
-
 
 def simulate(a, b, rng=np.random.default_rng()):
-    data = rng.normal(loc=a, size=(b,))
+    data = rng.normal(loc=a, scale=b, size=(6000,))
     # time.sleep(0.4)
     return data
 
 
-tasks = [{"run_nr": run, "a": 2, "b": 100} for run in range(runs)]
-sim = dockersim.DockerSim(simulate, tasks, 1234)
-sim.run(num_processes=nprocesses)
+tasks = [{"a": a, "b": b} for a in range(1, 10) for b in range(1, 10)]
+sim = dockersim.DockerSim(simulate, tasks, 555, datadir="data")
+print(f"Running {runs} of {len(tasks)} tasks each in {nprocesses} processes.")
+sim.run(runs=runs, num_processes=nprocesses)
 
 df = pl.scan_csv("data/results_*.csv")
 
 fig = plt.figure()
 sns.lineplot(
-    df.collect(),
+    df.filter(pl.col("b") == 5).collect(),
     x="series",
     y="value",
+    hue="a",
     errorbar=("sd", 1.96),
 )
 plt.xlabel("Series")
