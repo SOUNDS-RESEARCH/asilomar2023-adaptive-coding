@@ -5,3 +5,4 @@ RUN pip install -r src/requirements.txt
 WORKDIR /wd
 ENV PYTHONPATH "${PYTHONPATH}:/wd"
 ENTRYPOINT ["python", "src/simulate.py"]
+CMD ["100", "4"]

@@ -1,22 +1,39 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import time
-from pythonutils import utils
+import seaborn as sns
+import polars as pl
 
-data = np.random.normal(0, 2, (10000,))
-for n in utils.progressBar(
-    range(10),
-    prefix="Progress:",
-    length=50,
-    printEnd="",
-):
-    data += np.random.normal(0, 2, (10000,))
-    time.sleep(0.1)
+# from pythonutils import utils
+from pythonutils import dockersim
+
+runs = int(sys.argv[1])
+nprocesses = int(sys.argv[2])
+
+print(f"Running {runs} in {nprocesses} processes.")
+
+
+def simulate(a, b, rng=np.random.default_rng()):
+    data = rng.normal(loc=a, size=(b,))
+    # time.sleep(0.4)
+    return data
+
+
+tasks = [{"run_nr": run, "a": 2, "b": 100} for run in range(runs)]
+sim = dockersim.DockerSim(simulate, tasks, 1234)
+sim.run(num_processes=nprocesses)
+
+df = pl.scan_csv("data/results_*.csv")
 
 fig = plt.figure()
-plt.hist(data, 100)
-plt.xlabel("Value")
-plt.ylabel("Count")
-plt.title("Normal Distribution")
+sns.lineplot(
+    df.collect(),
+    x="series",
+    y="value",
+    errorbar=("sd", 1.96),
+)
+plt.xlabel("Series")
+plt.ylabel("Value")
+plt.title("Random value")
 
 fig.savefig("plots/figure.png")
