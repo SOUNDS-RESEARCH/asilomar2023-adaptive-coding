@@ -3,8 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import polars as pl
+import admm_fq_base as adfb
+import admm_fq_prires as adfp
 
-# from pythonutils import utils
+from pythonutils import utils
 from pythonutils import dockersim
 
 # The parameters of this script, the number of relizations per parameter combination,
@@ -16,52 +18,96 @@ num_processes = int(sys.argv[3])
 
 # This is the actual simulation function. We simulate the ADMM algorithm
 # (imported from admm_fq_*) for different algorithm onfigurations and parameter combinations.
-def simulate(a, b, rng=np.random.default_rng()):
-    data = rng.normal(loc=a, scale=b, size=(6000,))
-    # time.sleep(0.4)
-    for val in data:
-        yield {"val": val, "sq_val": val * val}
+def simulate(alg, rng=np.random.default_rng()):
+    L = 16
+
+    if alg == "adaptive":
+        nw = adfp.Network(L)
+    else:
+        nw = adfb.Network(L)
+
+    nw.addNode(0, 1.0)
+    nw.addNode(1, 1.0)
+    nw.addNode(2, 1.0)
+    nw.setConnection(0, [1])
+    nw.setConnection(1, [2])
+    nw.setConnection(2, [0])
+
+    SNR = 40
+    rho = 1
+    stepsize = 0.8
+    eta = 0.98
+    M = nw.N
+    nr_samples = 100000
+    partitions = 1
+    part_len = int(nr_samples / partitions)
+
+    true_norms = [1.0, 1.0, 1.0, 1.0]
+
+    u = rng.normal(size=(nr_samples, 1))
+    clean_signal: np.ndarray = u / u.max()
+
+    clean_signal = clean_signal / clean_signal.std(axis=0) * 0.25
+
+    h = {}
+    hf = {}
+    noisy_signals = np.empty((0, M))
+    for part in range(partitions):
+        h_, hf_ = utils.generateRandomIRs(L, M, true_norms, rng)
+        h[part] = h_
+        hf[part] = hf_
+        noisy_signals_ = utils.getNoisySignal(
+            clean_signal[part * part_len : (part + 1) * part_len], h_, SNR, rng
+        )
+        noisy_signals = np.concatenate([noisy_signals, noisy_signals_])
+
+    hopsize = L
+    nw.reset()
+    nw.setParameters(rho, stepsize, eta, 1, 0.0)
+    if alg == "adaptive":
+        nw.setDeltas(1e-5, 0.1, 0.1, 1.005, 0.0001)
+    for k_admm_fq in range(0, nr_samples - 2 * L, hopsize):
+        nw.step(noisy_signals[k_admm_fq : k_admm_fq + 2 * L, :])
+        error = []
+        for m in range(M):
+            node: adfb.NodeProcessor = nw.nodes[m]
+            error.append(
+                utils.NPM(
+                    node.getEstimate(),
+                    hf[utils.getPart(k_admm_fq, part_len)][:, m, None],
+                )
+            )
+        yield {"npm": np.mean(error)}
 
 
 # This has to match the dictionary keys that simulate yields
-return_value_names = ["val", "sq_val"]
+return_value_names = ["npm"]
 
 # Define the tasks, which are basically all the parameter combinations for
 # which the algorithms are supposed to be run
-tasks = [{"a": a, "b": b} for a in range(1, 10) for b in range(1, 10)]
+tasks = [{"alg": a} for a in ["base", "adaptive"]]
 
 # Create and run the simulation
 sim = dockersim.DockerSim(simulate, tasks, return_value_names, seed, datadir="data")
 sim.run(runs=runs, num_processes=num_processes)
 
 # Read the data from the resulting csv files (we are using polars lazy api)
-df = pl.scan_csv("data/results_*.csv")
+# df = pl.scan_csv("data/results_*.csv")
+q = pl.scan_csv("data/results_*.csv").with_columns(pl.col("npm").log10() * 20)
 
 # Plot and save relevant figures
-fig = plt.figure()
+fig = plt.figure(figsize=(6, 4))
 sns.lineplot(
-    df.filter(pl.col("b") == 5).collect(),
+    q.collect(),
     x="series",
-    y="val",
-    hue="a",
-    errorbar=("sd", 1.96),
+    y="npm",
+    hue="alg",
+    estimator=np.mean,
+    errorbar=None,
 )
-plt.xlabel("Series")
-plt.ylabel("Value")
-plt.title("Random value")
+plt.xlabel("Time [frames]")
+plt.ylabel("NPM [dB]")
+plt.title("Normalized Projection Misalignment")
+plt.grid()
 
-fig.savefig("plots/figure.png")
-
-fig = plt.figure()
-sns.lineplot(
-    df.filter(pl.col("b") == 5).collect(),
-    x="series",
-    y="sq_val",
-    hue="a",
-    errorbar=("sd", 1.96),
-)
-plt.xlabel("Series")
-plt.ylabel("Value")
-plt.title("Random value")
-
-fig.savefig("plots/figure1.png")
+fig.savefig("plots/npm.png")
