@@ -95,7 +95,9 @@ for k_admm_fq in range(0, nr_samples - 2 * L, hopsize):
     for m in range(M):
         node: adfb.NodeProcessor = nwb.nodes[m]
         error.append(
-            utils.NPM(node.getEstimate(), hf[getPart(k_admm_fq, part_len)][:, m, None])
+            utils.NPM(
+                node.getEstimate(), hf[utils.getPart(k_admm_fq, part_len)][:, m, None]
+            )
         )
     # npm.append(np.mean(error))
     npm.append(error)
@@ -117,7 +119,11 @@ for k_admm_fq in range(0, nr_samples - 2 * L, hopsize):
     error = []
     for m in range(M):
         node: adfpr.NodeProcessor = nwpr.nodes[m]
-        error.append(utils.NPM(node.getEstimate(), hf[getPart(k_admm_fq)][:, m, None]))
+        error.append(
+            utils.NPM(
+                node.getEstimate(), hf[utils.getPart(k_admm_fq, part_len)][:, m, None]
+            )
+        )
     # npm.append(np.mean(error))
     npm.append(error)
 npm = np.asarray(npm)
@@ -224,5 +230,85 @@ plt.tight_layout()
 plt.legend()
 plt.show()
 # utils.savefig(fig, "localstate")
+
+# %%
+import seaborn as sns
+from seaborn import objects as so
+from seaborn import axes_style
+import polars as pl
+import matplotlib.pyplot as plt
+import utils
+
+# %%
+q = pl.scan_csv("../data/results_*.csv").with_columns(pl.col("npm").log10() * 20)
+
+# %%
+plt.rcParams.update(
+    {
+        "font.family": "serif",  # use serif/main font for text elements
+        "text.usetex": False,  # use inline math for ticks
+        "pgf.rcfonts": False,  # don't setup fonts from rc parameters
+        "font.size": 7,
+    }
+)
+textwidth = 245
+linewidth = 1.2
+fig, ax = plt.subplots(figsize=utils.set_size(textwidth, 1.0, (1, 1), 0.4))
+plt.plot(
+    q.filter(pl.col("alg") == "base")
+    .groupby("series", maintain_order=True)
+    .agg(pl.col("npm").median())
+    .select(pl.col("npm"))
+    .collect(),
+    "k-",
+    label=f"optimal",
+    markersize=4,
+    markevery=(1, 500),
+    alpha=1,
+    linewidth=linewidth,
+)
+plt.legend()
+plt.tight_layout(pad=0.5)
+plt.grid()
+plt.show()
+
+utils.savefig(fig, "npm")
+
+# p = (
+#     so.Plot(
+#         data=q.collect(),
+#         x="series",
+#         y="npm",
+#         color="alg",
+#         linestyle="alg",
+#     )
+#     .theme(
+#         axes_style("whitegrid"),
+#     )
+#     .add(
+#         so.Line(linewidth=1),
+#         so.Agg("median"),
+#     )
+#     .add(
+#         so.Band(),
+#         so.Est(
+#             "median",
+#             ("se", 1.96),
+#         ),
+#     )
+#     .label(
+#         x="Time [frames]",
+#         y="NPM [dB]",
+#     )
+#     .on(ax)
+# )
+# sns.move_legend(ax, "center left")
+# p.save(
+#     "test.png",
+#     dpi=300,
+#     bbox_inches="tight",
+# )
+# # plt.legend(loc=1)
+# plt.show()
 
 # %%

@@ -14,10 +14,16 @@ from pythonutils import dockersim
 runs = int(sys.argv[1])
 seed = int(sys.argv[2])
 num_processes = int(sys.argv[3])
+only_plot = sys.argv[4] if len(sys.argv) > 4 else "--sim"
+
+if only_plot == "--plot":
+    import plot
+
+    exit(0)
 
 
-# This is the actual simulation function. We simulate the ADMM algorithm
-# (imported from admm_fq_*) for different algorithm onfigurations and parameter combinations.
+# This is the actual simulation function. We simulate the ADMM algorithm (imported from
+# admm_fq_*) for different algorithm onfigurations and parameter combinations.
 def simulate(alg, rng=np.random.default_rng()):
     L = 16
 
@@ -33,7 +39,7 @@ def simulate(alg, rng=np.random.default_rng()):
     nw.setConnection(1, [2])
     nw.setConnection(2, [0])
 
-    SNR = 40
+    SNR = 20
     rho = 1
     stepsize = 0.8
     eta = 0.98
@@ -63,9 +69,11 @@ def simulate(alg, rng=np.random.default_rng()):
 
     hopsize = L
     nw.reset()
-    nw.setParameters(rho, stepsize, eta, 1, 0.0)
     if alg == "adaptive":
+        nw.setParameters(rho, stepsize, eta, 0.25, 0.0)
         nw.setDeltas(1e-5, 0.1, 0.1, 1.005, 0.0001)
+    else:
+        nw.setParameters(rho, stepsize, eta, 1, 0.0)
     for k_admm_fq in range(0, nr_samples - 2 * L, hopsize):
         nw.step(noisy_signals[k_admm_fq : k_admm_fq + 2 * L, :])
         error = []
@@ -85,29 +93,12 @@ return_value_names = ["npm"]
 
 # Define the tasks, which are basically all the parameter combinations for
 # which the algorithms are supposed to be run
-tasks = [{"alg": a} for a in ["base", "adaptive"]]
+tasks = [{"alg": alg} for alg in ["base", "adaptive"]]
 
 # Create and run the simulation
 sim = dockersim.DockerSim(simulate, tasks, return_value_names, seed, datadir="data")
 sim.run(runs=runs, num_processes=num_processes)
 
-# Read the data from the resulting csv files (we are using polars lazy api)
-# df = pl.scan_csv("data/results_*.csv")
-q = pl.scan_csv("data/results_*.csv").with_columns(pl.col("npm").log10() * 20)
 
-# Plot and save relevant figures
-fig = plt.figure(figsize=(6, 4))
-sns.lineplot(
-    q.collect(),
-    x="series",
-    y="npm",
-    hue="alg",
-    estimator=np.mean,
-    errorbar=None,
-)
-plt.xlabel("Time [frames]")
-plt.ylabel("NPM [dB]")
-plt.title("Normalized Projection Misalignment")
-plt.grid()
-
-fig.savefig("plots/npm.png")
+# plot the relevant figures (in script plot.py)
+import plot
