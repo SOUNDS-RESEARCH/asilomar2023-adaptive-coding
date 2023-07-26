@@ -307,9 +307,7 @@ class NodeProcessor:
             + self.y
             + self.rho * (self.x - self.z_l)
         )
-        V = 1 / (
-            np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho + self.lambd
-        )
+        V = 1 / (np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho + self.lambd)
         self.x = self.x - self.mu * V * y
         self.xy = self.rho * self.x + self.y
 
@@ -352,8 +350,8 @@ class NodeProcessor:
         self.res_diff = res_n - self.old_res
         self.old_res = self.old_res * self.eta + (1 - self.eta) * res_n
         # self.residuals.append((self.old_res, self.res_diff))
-        self.xs.append(np.linalg.norm(self.x))
-        self.zs.append(np.linalg.norm(self.z_l))
+        # self.xs.append(np.linalg.norm(self.x))
+        # self.zs.append(np.linalg.norm(self.z_l))
         self.residuals.append(self.res_diff)
         self.y = self.y + res
 

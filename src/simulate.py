@@ -44,8 +44,8 @@ def simulate(alg, rng=np.random.default_rng()):
     stepsize = 0.8
     eta = 0.98
     M = nw.N
-    nr_samples = 100000
-    partitions = 1
+    nr_samples = 150000
+    partitions = 3
     part_len = int(nr_samples / partitions)
 
     true_norms = [1.0, 1.0, 1.0, 1.0]
@@ -77,19 +77,26 @@ def simulate(alg, rng=np.random.default_rng()):
     for k_admm_fq in range(0, nr_samples - 2 * L, hopsize):
         nw.step(noisy_signals[k_admm_fq : k_admm_fq + 2 * L, :])
         error = []
+        # var = 0
+        residual = 0
+        delta_consensus = 0
         for m in range(M):
-            node: adfb.NodeProcessor = nw.nodes[m]
+            node: adfp.NodeProcessor = nw.nodes[m]
             error.append(
                 utils.NPM(
                     node.getEstimate(),
                     hf[utils.getPart(k_admm_fq, part_len)][:, m, None],
                 )
             )
-        yield {"npm": np.mean(error)}
+            if alg == "adaptive" and m == 0:
+                residual = node.old_res
+                delta_consensus = node.delta_consensus
+                # delta_local = node.delta_local
+        yield {"npm": np.mean(error), "res": residual, "delta_consensus": delta_consensus}
 
 
 # This has to match the dictionary keys that simulate yields
-return_value_names = ["npm"]
+return_value_names = ["npm", "res", "delta_consensus"]
 
 # Define the tasks, which are basically all the parameter combinations for
 # which the algorithms are supposed to be run
