@@ -1,9 +1,5 @@
 import numpy as np
-
 import matplotlib.pyplot as plt
-
-# import seaborn as sns
-from seaborn import objects as so
 import polars as pl
 
 from pythonutils import utils
@@ -11,7 +7,7 @@ from pythonutils import utils
 plt.rcParams.update(
     {
         "font.family": "serif",  # use serif/main font for text elements
-        "text.usetex": False,  # use inline math for ticks
+        "text.usetex": False,  # don't use inline math for ticks (not on docker image)
         "pgf.rcfonts": False,  # don't setup fonts from rc parameters
         "font.size": 7,
     }
@@ -29,17 +25,27 @@ q = pl.scan_csv(
         "res": pl.Float64,
         "delta_consensus": pl.Float32,
     },
-).with_columns(pl.col("npm").log10() * 20)
+).with_columns((pl.col("npm").log10() * 20))
 q_base = (
     q.filter(pl.col("alg") == "base")
     .groupby("series", maintain_order=True)
-    .agg(pl.col("npm").median())
+    .agg(npm_db_m=pl.col("npm").median())
+    # .agg(
+    #     npm_db_m=pl.col("npm").median(),
+    #     npm_db_std=pl.col("npm").std(),
+    #     count=pl.col("npm").count(),
+    # )
     .take_every(plot_every)
 )
 q_adaptive = (
     q.filter(pl.col("alg") == "adaptive")
     .groupby("series", maintain_order=True)
-    .agg(pl.col("npm").median())
+    .agg(npm_db_m=pl.col("npm").median())
+    # .agg(
+    #     npm_db_m=pl.col("npm").median(),
+    #     npm_db_std=pl.col("npm").std(),
+    #     count=pl.col("npm").count(),
+    # )
     .take_every(plot_every)
 )
 
@@ -48,9 +54,9 @@ textwidth = 245
 linewidth = 1.2
 fig, ax = plt.subplots(figsize=utils.set_size(textwidth, 1.0, (1, 1), 0.4))
 data = q_base.collect()
-plt.plot(
+(line,) = plt.plot(
     data["series"],
-    data["npm"],
+    data["npm_m"],
     "-o",
     label=f"optimal",
     markersize=4,
@@ -58,10 +64,17 @@ plt.plot(
     alpha=1,
     linewidth=linewidth,
 )
+# plt.fill_between(
+#     data["series"],
+#     data["npm_m"] - data["npm_std"] / np.sqrt(data["count"]),
+#     data["npm_m"] + data["npm_std"] / np.sqrt(data["count"]),
+#     color=line.get_color(),
+#     alpha=0.25,
+# )
 data = q_adaptive.collect()
-plt.plot(
+(line,) = plt.plot(
     data["series"],
-    data["npm"],
+    data["npm_m"],
     "--x",
     label=f"adaptive",
     markersize=4,
@@ -69,6 +82,13 @@ plt.plot(
     alpha=1,
     linewidth=linewidth,
 )
+# plt.fill_between(
+#     data["series"],
+#     data["npm_m"] - data["npm_std"] / np.sqrt(data["count"]),
+#     data["npm_m"] + data["npm_std"] / np.sqrt(data["count"]),
+#     color=line.get_color(),
+#     alpha=0.25,
+# )
 # plt.legend(title="Algorithms", fontsize=5, title_fontsize=6)
 plt.legend(fontsize=6)
 plt.grid()

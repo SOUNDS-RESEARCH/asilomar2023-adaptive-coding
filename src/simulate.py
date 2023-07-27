@@ -1,8 +1,5 @@
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import polars as pl
 import admm_fq_base as adfb
 import admm_fq_prires as adfp
 

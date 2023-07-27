@@ -1,9 +1,6 @@
 numpy
 scipy
 matplotlib
-seaborn
 polars
-pandas
-pyarrow
 tqdm
 multiprocess
