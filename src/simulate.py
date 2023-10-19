@@ -21,13 +21,16 @@ if only_plot == "--plot":
 
 # This is the actual simulation function. We simulate the ADMM algorithm (imported from
 # admm_fq_*) for different algorithm onfigurations and parameter combinations.
-def simulate(alg, rng=np.random.default_rng()):
+def simulate1(alg, rng=np.random.default_rng()):
     L = 16
 
-    if alg == "adaptive":
-        nw = adfp.Network(L)
-    else:
-        nw = adfb.Network(L)
+    match alg:
+        case "adaptive":
+            nw = adfp.Network(L)
+        case "base":
+            nw = adfb.Network(L)
+        case _:
+            nw = adfb.Network(L)
 
     nw.addNode(0, 1.0)
     nw.addNode(1, 1.0)
@@ -100,7 +103,9 @@ return_value_names = ["npm", "res", "delta_consensus"]
 tasks = [{"alg": alg} for alg in ["base", "adaptive"]]
 
 # Create and run the simulation
-sim = dockersim.DockerSim(simulate, tasks, return_value_names, seed, datadir="data")
+sim = dockersim.DockerSim(
+    simulate1, tasks, return_value_names, seed, datadir="data", file_suffix="sim1"
+)
 sim.run(runs=runs, num_processes=num_processes)
 
 

@@ -9,14 +9,14 @@ plt.rcParams.update(
         "font.family": "serif",  # use serif/main font for text elements
         "text.usetex": False,  # don't use inline math for ticks (not on docker image)
         "pgf.rcfonts": False,  # don't setup fonts from rc parameters
-        "font.size": 7,
+        "font.size": 8,
     }
 )
 
 # Read the data from the resulting csv files (we are using polars lazy api)
 plot_every = 50  # downsample data a bit so plots are bettwe readable
 q = pl.scan_csv(
-    "data/results_*.csv",
+    "data/sim1_*.csv",
     dtypes={
         "run_rn": pl.Int64,
         "alg": pl.Utf8,
@@ -56,7 +56,7 @@ fig, ax = plt.subplots(figsize=utils.set_size(textwidth, 1.0, (1, 1), 0.4))
 data = q_base.collect()
 (line,) = plt.plot(
     data["series"],
-    data["npm_m"],
+    data["npm_db_m"],
     "-o",
     label=f"optimal",
     markersize=4,
@@ -74,7 +74,7 @@ data = q_base.collect()
 data = q_adaptive.collect()
 (line,) = plt.plot(
     data["series"],
-    data["npm_m"],
+    data["npm_db_m"],
     "--x",
     label=f"adaptive",
     markersize=4,
