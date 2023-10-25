@@ -1,6 +1,5 @@
 import numpy as np
-from typing import Callable
-import huffman as hf
+from typing import Callable, Tuple
 
 
 class NodeProcessor:
@@ -33,24 +32,42 @@ class NodeProcessor:
         # CR matrix
         self.R_xp_ = None
 
-        self.var_a = 0.98
-        self.var_b = 0.98
-        self.var_c = 0.98
+        self.is_seq = False
 
-        self.res_local_var = np.ones((self.N,)) * 1e-7
-        self.last_local_var = np.ones((self.N,)) * 1e-7
-        self.res_consensus_var = np.ones((self.N,)) * 1e-7
-        self.last_consensus_var = np.ones((self.N,)) * 1e-7
-        self.res_local_mean = np.zeros((self.N,))
-        self.res_consensus_mean = np.zeros((self.N,))
+        self.var_a_lt = 0.98
+        self.var_b_lt = 0.98
+        self.var_c_lt = 0.98
+        self.var_a_st = 0.1
+        self.var_b_st = 0.1
+        self.var_c_st = 1
+
+        self.res_local_var_lt = 1e-7
+        self.res_consensus_var_lt = 1e-7
+        self.res_local_mean_lt = 0
+        self.res_consensus_mean_lt = 0
+        self.res_local_var_st = 1e-7
+        self.res_consensus_var_st = 1e-7
+        self.res_local_mean_st = 0
+        self.res_consensus_mean_st = 0
         self.res_local_var_hist = []
         self.res_consensus_var_hist = []
 
-        self.increase_mult = 1.5
-        self.decrease_mult = 1 / self.increase_mult
-
-        self.enc_normalizer = None
-        self.dec_normalizer = None
+        self.delta_min = 1e-8
+        self.delta_max = 0.1
+        self.delta_dec = 0.8
+        self.delta_inc = 1.05
+        self.epsilon_dec = 0.01
+        self.deltas = []
+        self.delta_local = 0.1
+        self.delta_consensus = 0.1
+        self.delta_local_state = np.array((0.5, 0.5))
+        self.delta_consensus_state = np.array((0.5, 0.5))
+        self.delta_local_hist = []
+        self.delta_consensus_hist = []
+        self.delta_local_state_hist = []
+        self.delta_consensus_state_hist = []
+        self.delta_local_vardiff_hist = []
+        self.delta_consensus_vardiff_hist = []
 
         self.residuals = []
 
@@ -78,11 +95,6 @@ class NodeProcessor:
             self.transmit_indices[m] = i
             self.transmit_index_ranges[m] = range(i * self.L, (i + 1) * self.L)
 
-        self.local_enc_normalizer = np.ones((len(self.receive),))
-        self.local_dec_normalizer = np.ones((len(self.transmit),))
-        self.consensus_enc_normalizer = 1
-        self.consensus_dec_normalizer = np.ones((len(self.receive),))
-
         # local copy of global primal
         self.z_l = np.zeros(shape=(self.L * self.N, 1), dtype=np.complex128) / np.sqrt(
             self.L
@@ -103,47 +115,131 @@ class NodeProcessor:
         self.W_R = self.W_01_Lx2L_fq.conj().T @ self.W_01_Lx2L_fq
 
         self.first = True
-
-        self.res_local_var = np.ones((self.N,)) * 1e-7
-        self.last_local_var = np.ones((self.N,)) * 1e-7
-        self.res_consensus_var = np.ones((self.N,)) * 1e-7
-        self.last_consensus_var = np.ones((self.N,)) * 1e-7
-        self.res_local_mean = np.zeros((self.N,))
-        self.res_consensus_mean = np.zeros((self.N,))
-
+        self.res_local_var_lt = 1e-7
+        self.res_consensus_var_lt = 1e-7
+        self.res_local_mean_lt = 0
+        self.res_consensus_mean_lt = 0
+        self.res_local_var_st = 1e-7
+        self.res_consensus_var_st = 1e-7
+        self.res_local_mean_st = 0
+        self.res_consensus_mean_st = 0
+        self.delta_local_state = np.array((0.5, 0.5))
+        self.delta_consensus_state = np.array((0.5, 0.5))
         self.res_local_var_hist = []
         self.res_consensus_var_hist = []
+        self.delta_local_hist = []
+        self.delta_consensus_hist = []
+        self.delta_local_state_hist = []
+        self.delta_consensus_state_hist = []
+        self.delta_local_vardiff_hist = []
+        self.delta_consensus_vardiff_hist = []
         self.residuals = []
+        self.xs = []
+        self.zs = []
+        self.old_res = 0
+        self.res_diff = 0
 
-    def setParameters(self, rho, mu, eta):
+    def setParameters(self, rho, mu, eta, lambd, decimals, multiplier):
         self.rho = rho
         self.mu = mu
         self.eta = eta
+        self.lambd = lambd
+        self.decimals = decimals
+        self.multiplier = multiplier
 
-    def setCodebook(
-        self, tree, table, bins, centers, ref_var, increase_mult, decrease_mult
+    def setDeltas(
+        self,
+        delta_min=1e-8,
+        delta_max=0.1,
+        delta_dec=0.8,
+        delta_inc=1.05,
+        epsilon=0.25,
     ):
-        self.tree = tree
-        self.table = table
-        self.bins = bins
-        self.centers = centers
-        self.ref_var = ref_var
+        self.delta_min = delta_min
+        self.delta_max = delta_max
+        self.delta_dec = delta_dec
+        self.delta_inc = delta_inc
+        self.epsilon_dec = epsilon
+        self.epsilon_inc = epsilon
 
     def setSignal(self, signal):
         i = self.receive_indices[self.id]
         self.block[:, i] = signal
 
-    def estimateVar(self, instant: np.ndarray, var_est: float, mean_est: float = 0):
+    def estimateVar(
+        self,
+        instant: np.ndarray,
+        var_est_lt: float,
+        mean_est_lt: float,
+        var_est_st: float,
+        mean_est_st: float,
+    ):
+        if self.first:
+            return (
+                var_est_lt,
+                mean_est_lt,
+                var_est_st,
+                mean_est_st,
+                0,
+            )
         if np.any(np.iscomplex(instant)):
             vec = np.concatenate([np.real(instant), np.imag(instant)])
         else:
             vec = instant
-        mean_est = self.var_a * mean_est + (1 - self.var_a) * vec.mean()
-        var_old = var_est
-        var_est = self.var_b * var_est + (1 - self.var_b) / self.var_c * np.square(
-            vec.mean() - mean_est
+        nom = np.linalg.norm(vec)
+        if np.isnan(nom) or not np.isfinite(nom):
+            nom = self.L * self.N
+        var_old = var_est_lt
+
+        mean_est_st = self.var_a_st * mean_est_st + (1 - self.var_a_st) * nom
+        mean_est_lt = self.var_a_lt * mean_est_lt + (1 - self.var_a_lt) * nom
+
+        var_est_st = self.var_b_st * var_est_st + (
+            1 - self.var_b_st
+        ) / self.var_c_st * np.square(nom - mean_est_lt)
+
+        var_diff = var_est_st - var_old
+
+        var_est_lt = self.var_b_lt * var_est_lt + (
+            1 - self.var_b_lt
+        ) / self.var_c_lt * np.square(nom - mean_est_lt)
+
+        return (
+            var_est_lt,
+            mean_est_lt,
+            var_est_st,
+            mean_est_st,
+            var_diff,
         )
-        return var_est, mean_est
+
+    def getDelta(self, old_delta: float):
+        # if self.old_res > self.epsilon_dec:
+        if self.res_diff >= self.epsilon_dec:
+            new_delta = (
+                old_delta if old_delta <= self.delta_min else old_delta * self.delta_dec
+            )
+        if self.res_diff < -self.epsilon_dec:
+            new_delta = old_delta
+            # new_delta = (
+            #     old_delta
+            #     if old_delta >= self.delta_max
+            #     else old_delta * self.delta_inc
+            # )
+        if self.res_diff >= -self.epsilon_dec and self.res_diff < self.epsilon_dec:
+            # else:
+            new_delta = (
+                old_delta if old_delta >= self.delta_max else old_delta * self.delta_inc
+            )
+
+        return new_delta
+
+    def setRounding(self, delta):
+        if delta == 0.0:
+            self.decimals = np.inf
+            self.multiplier = 0.0
+        else:
+            self.decimals = int(np.log10((1 / delta)))
+            self.multiplier = 1 / (delta * 10**self.decimals)
 
     def encodeSignal(self):
         i = self.receive_indices[self.id]
@@ -167,132 +263,51 @@ class NodeProcessor:
     #     self.block[:, i, None] = res_q
     #     return self.block[:, i]
 
-    def digitize(self, vec):
-        x = np.concatenate([vec.real, vec.imag]).squeeze()
-        # print(x)
-        return list(np.searchsorted(self.bins, x, side="left") - 1)
-
-    def dedigitize(self, digitized):
-        nn = self.centers[digitized]
-        pp = nn[: self.L] + 1j * nn[self.L :]
-        return pp.reshape(self.L, 1)
-
-    def hufencode(self, digitized):
-        encoded = hf._encode(digitized, self.table)
-        return encoded
-
-    def hufdecode(self, encoded):
-        decoded = hf.huffman_decode(encoded, self.tree)
-        return list(decoded)
-
     def encodeLocal(self, to_node):
         ind = self.receive_index_ranges[to_node]
-        i = self.receive_indices[to_node]
-
-        # compute residual
         res = self.xy[ind] - self.xy_q[ind]
 
-        # estimate variance
-        self.res_local_var[i], self.res_local_mean[i] = self.estimateVar(
-            res, self.res_local_var[i], self.res_local_mean[i]
-        )
-        self.res_local_var_hist.append(self.res_local_var)
+        # if self.is_seq:
+        self.delta_local = self.getDelta(self.delta_local)
+        self.delta_local_hist.append(self.delta_local)
 
-        # determince scaling update
-        if self.res_local_var[i] > self.last_local_var[i] * self.increase_mult:
-            inc_dec = True
-            self.local_enc_normalizer[i] *= self.increase_mult
-        else:
-            inc_dec = False
-            self.local_enc_normalizer[i] *= self.decrease_mult
-
-        # value to symbol
-        digitized = self.digitize(res / self.local_enc_normalizer[i])
-
-        # compute local quantized residual
-        res_q = self.dedigitize(digitized) * self.local_enc_normalizer[i]
+        self.setRounding(self.delta_local)
+        res_q = quantizeVariable(self.decimals, self.multiplier, res)
         self.xy_q[ind] = self.xy_q[ind] + res_q
+        return res, res_q, self.delta_local_state
 
-        # encode
-        encoded = self.hufencode(digitized)
-        return encoded, inc_dec
-
-    def decodeLocal(self, from_node, encoded, inc_dec):
+    def decodeLocal(self, from_node, res_q, inc_dec):
         i = self.transmit_indices[from_node]
-
-        # decode
-        digitized = self.hufdecode(encoded)
-
-        # determince scaling update
-        if inc_dec:
-            self.local_dec_normalizer[i] *= self.increase_mult
-        else:
-            self.local_dec_normalizer[i] *= self.decrease_mult
-
-        # symbol to value
-        res_q = self.dedigitize(digitized) * self.local_dec_normalizer[i]
-
-        # update local
+        # print("res_q", res_q)
         self.xy_r[:, i, None] = self.xy_r[:, i, None] + res_q
         return self.xy_r[:, i]
 
     def encodeConsensus(self):
         ind = self.receive_index_ranges[self.id]
-        i = self.receive_indices[self.id]
-
-        # compute residual
         res = self.z_l[ind] - self.z_l_q[ind]
-
-        # estimate variance
-        self.res_consensus_var[i], self.res_consensus_mean[i] = self.estimateVar(
-            res, self.res_consensus_var[i], self.res_consensus_mean[i]
-        )
-        self.res_consensus_var_hist.append(self.res_consensus_var)
-
-        # determince scaling update
-        if self.res_consensus_var[i] > self.last_consensus_var[i] * self.increase_mult:
-            inc_dec = True
-            self.consensus_enc_normalizer[i] *= self.increase_mult
-        else:
-            inc_dec = False
-            self.consensus_enc_normalizer[i] *= self.decrease_mult
-
-        # value to symbol
-        digitized = self.digitize(res / self.consensus_enc_normalizer[i])
-
-        # compute consensus quantized residual
-        res_q = self.dedigitize(digitized) * self.consensus_enc_normalizer[i]
+        # if self.is_seq:
+        self.delta_consensus = self.getDelta(self.delta_consensus)
+        self.delta_consensus_hist.append(self.delta_consensus)
+        self.setRounding(self.delta_consensus)
+        res_q = quantizeVariable(self.decimals, self.multiplier, res)
         self.z_l_q[ind] = self.z_l_q[ind] + res_q
+        return res, res_q, self.delta_consensus_state
 
-        # encode
-        encoded = self.hufencode(digitized)
-        return encoded, inc_dec
-
-    def decodeConsensus(self, from_node, encoded, inc_dec):
+    def decodeConsensus(self, from_node, res_q, inc_dec):
         ind = self.receive_index_ranges[from_node]
-        i = self.receive_indices[from_node]
-
-        # decode
-        digitized = self.hufdecode(encoded)
-
-        # determince scaling update
-        if inc_dec:
-            self.consensus_dec_normalizer[i] *= self.increase_mult
-        else:
-            self.consensus_dec_normalizer[i] *= self.decrease_mult
-
-        # symbol to value
-        res_q = self.dedigitize(digitized) * self.consensus_dec_normalizer[i]
-
-        # update local
         self.z_l[ind] = self.z_l[ind] + res_q
         return self.z_l[ind]
 
     def solveLocal(self):
         R = self.construct_Rxp()  # construct matrix R_x+
         self.R_xp_ = R if self.first else self.eta * self.R_xp_ + (1 - self.eta) * R
-        y = self.R_xp_ @ self.x + self.y + self.rho * (self.x - self.z_l)
-        V = 1 / (np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho)
+        y = (
+            (self.R_xp_) @ self.x
+            + self.lambd * self.x
+            + self.y
+            + self.rho * (self.x - self.z_l)
+        )
+        V = 1 / (np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho + self.lambd)
         self.x = self.x - self.mu * V * y
         self.xy = self.rho * self.x + self.y
 
@@ -331,7 +346,13 @@ class NodeProcessor:
 
     def updateDual(self):
         res = self.rho * (self.x - self.z_l)
-        self.residuals.append(res)
+        res_n = np.linalg.norm(res) ** 2
+        self.res_diff = res_n - self.old_res
+        self.old_res = self.old_res * self.eta + (1 - self.eta) * res_n
+        # self.residuals.append((self.old_res, self.res_diff))
+        # self.xs.append(np.linalg.norm(self.x))
+        # self.zs.append(np.linalg.norm(self.z_l))
+        self.residuals.append(self.res_diff)
         self.y = self.y + res
 
     def getEstimate(self) -> np.ndarray:
@@ -360,6 +381,8 @@ class Network:
         self.global_ds = 1  # global update only done each K frames
         self.SNR_c = 1
         self.rng = rng
+
+        self.sequence_ind = 0
 
         self.onTransmitCallback: Callable = None
 
@@ -413,6 +436,10 @@ class Network:
         self.transmitConsensus()
         self.localDualUpdate()
 
+        self.sequence_ind = (self.sequence_ind + 1) % self.N
+        for node in self.nodes.values():
+            node.is_seq = node.id == self.sequence_ind
+
         node: NodeProcessor
         if self.nodes[0].first:
             for node in self.nodes.values():
@@ -443,8 +470,8 @@ class Network:
                 #     var_name="res_signal_q",
                 #     var=res_signal_q,
                 # )
-                # res_signal_q_trans = transmissionLoss(res_signal_q)
-                node2.decodeSignal(node1.id, res_signal_q)
+                res_signal_q_trans = transmissionLoss(res_signal_q)
+                node2.decodeSignal(node1.id, res_signal_q_trans)
 
     def localPrimalUpdate(self):
         node: NodeProcessor
@@ -458,7 +485,7 @@ class Network:
                 node2: NodeProcessor = self.nodes[node_ind2]
                 if node2 == node1:
                     continue
-                encoded, inc_dec = node1.encodeLocal(node2.id)
+                res_local, res_local_q, inc_dec = node1.encodeLocal(node2.id)
                 # self.onTransmit(
                 #     node1=node1.id,
                 #     node2=node2.id,
@@ -469,11 +496,12 @@ class Network:
                 self.onTransmit(
                     node1=node1.id,
                     node2=node2.id,
-                    var_name="res_local_encoded",
-                    var=encoded.copy(),
+                    var_name="res_local_q",
+                    delta=node1.delta_local,
+                    var=res_local_q,
                 )
-                # res_local_q_trans = transmissionLoss(res_local_q)
-                node2.decodeLocal(node1.id, encoded, inc_dec)
+                res_local_q_trans = transmissionLoss(res_local_q)
+                node2.decodeLocal(node1.id, res_local_q_trans, inc_dec)
 
     def transmitConsensus(self):
         node1: NodeProcessor
@@ -482,7 +510,7 @@ class Network:
                 node2: NodeProcessor = self.nodes[node_ind2]
                 if node2 == node1:
                     continue
-                encoded, inc_dec = node1.encodeConsensus()
+                res_consensus, res_consensus_q, inc_dec = node1.encodeConsensus()
                 # self.onTransmit(
                 #     node1=node1.id,
                 #     node2=node2.id,
@@ -492,11 +520,12 @@ class Network:
                 self.onTransmit(
                     node1=node1.id,
                     node2=node2.id,
-                    var_name="res_consensus_encoded",
-                    var=encoded.copy(),
+                    var_name="res_consensus_q",
+                    delta=node1.delta_consensus,
+                    var=res_consensus_q,
                 )
-                # res_consensus_q_trans = transmissionLoss(res_consensus_q)
-                node2.decodeConsensus(node1.id, encoded, inc_dec)
+                res_consensus_q_trans = transmissionLoss(res_consensus_q)
+                node2.decodeConsensus(node1.id, res_consensus_q_trans, inc_dec)
 
     def computeConsensus(self):
         node: NodeProcessor
@@ -519,10 +548,35 @@ class Network:
         for node in self.nodes.values():
             node.updateDual()
 
-    def setParameters(self, rho, mu, eta):
+    def setParameters(self, rho, mu, eta, lambd, q_step):
+        if q_step == 0.0:
+            self.decimals = np.inf
+            self.multiplier = 0.0
+        else:
+            self.decimals = int(np.log10((1 / q_step)))
+            self.multiplier = 1 / (q_step * 10**self.decimals)
+
         node: NodeProcessor
         for node in self.nodes.values():
-            node.setParameters(rho, mu, eta)
+            node.setParameters(rho, mu, eta, lambd, self.decimals, self.multiplier)
+
+    def setDeltas(
+        self,
+        delta_min=1e-8,
+        delta_max=0.1,
+        delta_dec=0.8,
+        delta_inc=1.05,
+        epsilon=0.25,
+    ):
+        node: NodeProcessor
+        for node in self.nodes.values():
+            node.setDeltas(
+                delta_min,
+                delta_max,
+                delta_dec,
+                delta_inc,
+                epsilon,
+            )
 
     def onTransmit(self, node1, node2, var_name, delta, var):
         if self.onTransmitCallback is not None:
@@ -537,3 +591,34 @@ def DFT_matrix(N):
     omega = np.exp(-2 * np.pi * 1j / N)
     W = np.power(omega, i * j) / np.sqrt(N)
     return W
+
+
+def quantizeVariable(decimals, multiplier, var):
+    if decimals == np.inf:
+        return var
+    return np.round(var * multiplier, decimals) / multiplier
+
+
+def transmissionLoss(var):
+    return var
+
+
+def find_nearest(array, value):
+    idx = np.searchsorted(array, value, side="left")
+    if idx > 0 and (
+        idx == len(array) or np.abs(value - array[idx - 1]) < np.abs(value - array[idx])
+    ):
+        return array[idx - 1]
+    else:
+        return array[idx]
+
+
+# def noisifyVariable(self, var):
+#     if np.any(np.iscomplex(var)):
+#         noise = self.rng.normal(
+#             loc=0, scale=np.sqrt(2) / 2, size=(len(var), 2)
+#         ).view(np.complex128)
+#     else:
+#         noise = self.rng.normal(loc=0, scale=np.sqrt(1), size=(len(var), 1))
+#     var_n = np.var(var) / self.SNR_c
+#     return var + noise * np.sqrt(var_n)
