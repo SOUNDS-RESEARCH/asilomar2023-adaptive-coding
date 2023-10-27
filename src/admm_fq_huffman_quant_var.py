@@ -46,9 +46,6 @@ class NodeProcessor:
         self.res_local_var_hist = []
         self.res_consensus_var_hist = []
 
-        self.increase_mult = 1.5
-        self.decrease_mult = 1 / self.increase_mult
-
         self.enc_normalizer = None
         self.dec_normalizer = None
 
@@ -131,10 +128,7 @@ class NodeProcessor:
         bins,
         centers,
         ref_var,
-        increase_mult,
-        decrease_mult,
-        inc_lim,
-        dec_lim,
+        smoothing,
     ):
         self.tree = tree
         self.table = table
@@ -146,31 +140,15 @@ class NodeProcessor:
         self.last_local_var = np.ones((self.N,)) * ref_var
         self.res_consensus_var = ref_var
         self.last_consensus_var = ref_var
-        self.increase_mult = increase_mult
-        self.decrease_mult = decrease_mult
-        self.inc_lim = inc_lim
-        self.dec_lim = dec_lim
+        self.local_dig_var_enc = np.ones((len(self.receive),)) * self.ref_var
+        self.cons_dig_var_enc = self.ref_var
+        self.local_dig_var_dec = np.ones((len(self.receive),)) * self.ref_var
+        self.cons_dig_var_dec = np.ones((len(self.receive),)) * self.ref_var
+        self.var_a = smoothing
 
     def setSignal(self, signal):
         i = self.receive_indices[self.id]
         self.block[:, i] = signal
-
-    def estimateVar(self, instant: np.ndarray, var_est: float, mean_est: float = 0):
-        vec = np.concatenate([instant.real, instant.imag]).squeeze()
-        nom = np.linalg.norm(vec) ** 2
-        if np.isnan(nom) or not np.isfinite(nom):
-            nom = self.L * self.N
-
-        mean_est = self.var_a * mean_est + (1 - self.var_a) * nom
-        # var_old = var_est
-        var_est = self.var_b * var_est + (1 - self.var_b) / self.var_c * np.square(
-            nom - mean_est
-        )
-        # mean_est = self.var_a * mean_est + (1 - self.var_a) * vec.mean()
-        # var_est = self.var_b * var_est + (1 - self.var_b) / self.var_c * np.square(
-        #     vec.mean() - mean_est
-        # )
-        return var_est, mean_est
 
     def encodeSignal(self):
         i = self.receive_indices[self.id]
@@ -215,165 +193,103 @@ class NodeProcessor:
     def encodeLocal(self, to_node):
         ind = self.receive_index_ranges[to_node]
         i = self.receive_indices[to_node]
-        # print(f"encode local {to_node} - {i}")
 
         # compute residual
         res = self.xy[ind] - self.xy_q[ind]
-        old_var = self.res_local_var[i]
-        old_mean = self.res_local_mean[i]
-        # estimate variance
-        self.res_local_var[i], self.res_local_mean[i] = self.estimateVar(
-            res, old_var, old_mean
-        )
-        # print(self.res_local_var[i])
-
-        # determine scaling update
-        # inc_dec = 0
-        # if (
-        #     self.res_local_var[i] / (self.ref_var * self.local_enc_normalizer[i])
-        #     > self.increase_mult
-        # ):
-        #     inc_dec = 1
-        #     self.local_enc_normalizer[i] *= self.increase_mult
-        # if (
-        #     self.res_local_var[i] / (self.ref_var * self.local_enc_normalizer[i])
-        #     < self.decrease_mult
-        # ):
-        #     inc_dec = -1
-        #     self.local_enc_normalizer[i] *= self.decrease_mult
 
         # value to symbol
-        # print(res)
         digitized = self.digitize(res / self.local_enc_normalizer[i])
-        # print(digitized)
-        digitized_arr = np.asarray(digitized)
-        digitized_arr[digitized_arr > self.mirror_bin] = (
-            len(self.centers) - 1
-        ) - digitized_arr[digitized_arr > self.mirror_bin]
-        dig_mean = np.mean(digitized_arr)
-        # dig_var = np.var(digitized_arr)
 
-        # dig_skew = stat.skew(digitized_arr)
-        # print(dig_mean)
-        # print(dig_skew)
-
-        # print(self.local_enc_normalizer[i])
         # compute local quantized residual
-        res_q = self.dedigitize(digitized) * self.local_enc_normalizer[i]
-        # print(res_q)
-        self.xy_q[ind] = self.xy_q[ind] + res_q
+        res_q = self.dedigitize(digitized)
 
-        inc_dec = 0
-        if 2 * dig_mean / self.mirror_bin > self.dec_lim:
-            inc_dec = -1
-            self.local_enc_normalizer[i] *= self.decrease_mult
-        if 2 * dig_mean / self.mirror_bin < self.inc_lim:
-            inc_dec = 1
-            self.local_enc_normalizer[i] *= self.increase_mult
+        # estimate variance
+        self.local_dig_var_enc[i] = self.local_dig_var_enc[i] * self.var_a + (
+            1 - self.var_a
+        ) * np.var(np.concatenate([res_q.real, res_q.imag]).squeeze())
+
+        # compute local quantized estimate
+        self.xy_q[ind] = self.xy_q[ind] + res_q * self.local_enc_normalizer[i]
+
+        # determine scaling update for next frame
+        self.local_enc_normalizer[i] = self.local_dig_var_enc[i] / self.ref_var
 
         # encode
         encoded = self.hufencode(digitized)
-        return list(encoded), inc_dec
+        return list(encoded), 0
 
     def decodeLocal(self, from_node, encoded, inc_dec):
         i = self.transmit_indices[from_node]
-        # print("decode local")
 
         # decode
         digitized = self.hufdecode(encoded)
 
         # symbol to value
-        res_q = self.dedigitize(digitized) * self.local_dec_normalizer[i]
-        # print(res_q)
+        res_q = self.dedigitize(digitized)
+
+        # estimate variance
+        self.local_dig_var_dec[i] = self.local_dig_var_dec[i] * self.var_a + (
+            1 - self.var_a
+        ) * np.var(np.concatenate([res_q.real, res_q.imag]).squeeze())
 
         # update local
-        self.xy_r[:, i, None] = self.xy_r[:, i, None] + res_q
+        self.xy_r[:, i, None] = (
+            self.xy_r[:, i, None] + res_q * self.local_dec_normalizer[i]
+        )
 
-        # determince scaling update
-        if inc_dec == 1:
-            self.local_dec_normalizer[i] *= self.increase_mult
-        if inc_dec == -1:
-            self.local_dec_normalizer[i] *= self.decrease_mult
+        # determine scaling update for next frame
+        self.local_dec_normalizer[i] = self.local_dig_var_dec[i] / self.ref_var
 
         return self.xy_r[:, i]
 
     def encodeConsensus(self):
         ind = self.receive_index_ranges[self.id]
-        i = self.receive_indices[self.id]
         # print("encode cons")
 
         # compute residual
         res = self.z_l[ind] - self.z_l_q[ind]
 
-        # estimate variance
-        self.res_consensus_var, self.res_consensus_mean = self.estimateVar(
-            res, self.res_consensus_var, self.res_consensus_mean
-        )
-
-        # determince scaling update
-        # inc_dec = 0
-        # if (
-        #     self.res_consensus_var / (self.ref_var * self.consensus_enc_normalizer)
-        #     > self.increase_mult
-        # ):
-        #     inc_dec = 1
-        #     self.consensus_enc_normalizer *= self.increase_mult
-        # if (
-        #     self.res_consensus_var / (self.ref_var * self.consensus_enc_normalizer)
-        #     < self.decrease_mult
-        # ):
-        #     inc_dec = -1
-        #     self.consensus_enc_normalizer *= self.decrease_mult
-
-        # value to symbol
-        # print(res)
+        # value to symbol conversion
         digitized = self.digitize(res / self.consensus_enc_normalizer)
-        # print(digitized)
-        digitized_arr = np.asarray(digitized)
-        digitized_arr[digitized_arr > self.mirror_bin] = (
-            len(self.centers) - 1
-        ) - digitized_arr[digitized_arr > self.mirror_bin]
-        dig_mean = np.mean(digitized_arr)
-        dig_var = np.var(digitized_arr)
-        # print(dig_mean)
 
         # compute consensus quantized residual
-        res_q = self.dedigitize(digitized) * self.consensus_enc_normalizer
-        # print(res_q)
-        self.z_l_q[ind] = self.z_l_q[ind] + res_q
+        res_q = self.dedigitize(digitized)
 
-        inc_dec = 0
-        if 2 * dig_mean / self.mirror_bin > self.dec_lim:
-            inc_dec = -1
-            self.consensus_enc_normalizer *= self.decrease_mult
-        if 2 * dig_mean / self.mirror_bin < self.inc_lim:
-            inc_dec = 1
-            self.consensus_enc_normalizer *= self.increase_mult
+        # estimate variance
+        self.cons_dig_var_enc = self.var_a * self.cons_dig_var_enc + (
+            1 - self.var_a
+        ) * np.var(np.concatenate([res_q.real, res_q.imag]).squeeze())
+
+        # compute quantized estimate
+        self.z_l_q[ind] = self.z_l_q[ind] + res_q * self.consensus_enc_normalizer
+
+        # determine scaling update for next frame
+        self.consensus_enc_normalizer = self.cons_dig_var_enc / self.ref_var
 
         # encode
         encoded = self.hufencode(digitized)
-        return list(encoded), inc_dec
+        return list(encoded), 0
 
     def decodeConsensus(self, from_node, encoded, inc_dec):
         ind = self.receive_index_ranges[from_node]
         i = self.receive_indices[from_node]
-        # print("decode cons")
 
         # decode
         digitized = self.hufdecode(encoded)
 
         # symbol to value
-        res_q = self.dedigitize(digitized) * self.consensus_dec_normalizer[i]
-        # print(res_q)
+        res_q = self.dedigitize(digitized)
+
+        # estimate variance
+        self.cons_dig_var_dec[i] = self.var_a * self.cons_dig_var_dec[i] + (
+            1 - self.var_a
+        ) * np.var(np.concatenate([res_q.real, res_q.imag]).squeeze())
 
         # update local
-        self.z_l[ind] = self.z_l[ind] + res_q
+        self.z_l[ind] = self.z_l[ind] + res_q * self.consensus_dec_normalizer[i]
 
-        # determince scaling update
-        if inc_dec == 1:
-            self.consensus_dec_normalizer[i] *= self.increase_mult
-        if inc_dec == -1:
-            self.consensus_dec_normalizer[i] *= self.decrease_mult
+        # determine scaling update for next frame
+        self.consensus_dec_normalizer[i] = self.cons_dig_var_dec[i] / self.ref_var
 
         return self.z_l[ind]
 
@@ -504,8 +420,10 @@ class Network:
 
         node: NodeProcessor
         for node in self.nodes.values():
-            node.res_local_var_hist.append(node.res_local_var.copy())
-            node.res_consensus_var_hist.append(node.res_consensus_var)
+            node.res_local_var_hist.append(node.local_dig_var_enc.copy())
+            node.res_local_var_hist.append(node.local_dig_var_dec.copy())
+            node.res_local_var_hist.append(node.cons_dig_var_enc)
+            node.res_local_var_hist.append(node.local_dig_var_dec.copy())
             node.local_enc_normalizer_hist.append(node.local_enc_normalizer.copy())
             node.local_dec_normalizer_hist.append(node.local_dec_normalizer.copy())
             node.consensus_enc_normalizer_hist.append(node.consensus_enc_normalizer)
@@ -629,10 +547,7 @@ class Network:
         bins,
         centers,
         ref_var,
-        increase_mult,
-        decrease_mult,
-        inc_lim,
-        dec_lim,
+        smoothing,
     ):
         node: NodeProcessor
         for node in self.nodes.values():
@@ -642,10 +557,7 @@ class Network:
                 bins,
                 centers,
                 ref_var,
-                increase_mult,
-                decrease_mult,
-                inc_lim,
-                dec_lim,
+                smoothing,
             )
 
     def onTransmit(self, node1, node2, var_name, var):
