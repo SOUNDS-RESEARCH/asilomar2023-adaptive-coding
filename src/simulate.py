@@ -9,15 +9,12 @@ import plot
 runs = int(sys.argv[1])
 seed = int(sys.argv[2])
 num_processes = int(sys.argv[3])
-only_plot = sys.argv[4] if len(sys.argv) > 4 else "--sim"
-
-# if only_plot == "--plot":
-#     import plot
-
-#     exit(0)
+execute = sys.argv[4] if len(sys.argv) > 4 else "--all"
 
 # simulate
-dynamic_tracking.dynamic_tracking(runs, seed, num_processes)
+if execute == "--all" or execute == "--dynamic":
+    dynamic_tracking.dynamic_tracking(runs, seed, num_processes)
 
 # plot the relevant figures (in script plot.py)
-plot.plot()
+if execute == "--all" or execute == "--plot":
+    plot.plot()

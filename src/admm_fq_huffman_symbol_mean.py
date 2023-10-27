@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Callable
-import huffman as hf
+from pythonutils import huffman as hf
 
 
 class NodeProcessor:
@@ -43,7 +43,7 @@ class NodeProcessor:
         self.last_consensus_var = None
         self.res_local_mean = None
         self.res_consensus_mean = None
-        self.res_local_var_hist = []
+        self.local_dig_mean_hist = []
         self.res_consensus_var_hist = []
 
         self.increase_mult = 1.5
@@ -51,6 +51,8 @@ class NodeProcessor:
 
         self.enc_normalizer = None
         self.dec_normalizer = None
+
+        self.bit_buffer = 0
 
         self.residuals = []
 
@@ -115,9 +117,10 @@ class NodeProcessor:
         self.res_local_mean = np.zeros((len(self.receive),))
         self.res_consensus_mean = 0
 
-        self.res_local_var_hist = []
+        self.local_dig_mean_hist = []
         self.res_consensus_var_hist = []
         self.residuals = []
+        self.bit_buffer = 0
 
     def setParameters(self, rho, mu, eta):
         self.rho = rho
@@ -193,7 +196,7 @@ class NodeProcessor:
 
     def hufencode(self, digitized):
         encoded = hf._encode(digitized, self.table)
-        return encoded
+        return list(encoded)
 
     def hufdecode(self, encoded):
         decoded = hf.huffman_decode(encoded, self.tree)
@@ -234,7 +237,8 @@ class NodeProcessor:
 
         # encode
         encoded = self.hufencode(digitized)
-        return list(encoded), inc_dec
+        self.bit_buffer += len(list(hf._bits_from_bytes(encoded)))
+        return encoded, inc_dec
 
     def decodeLocal(self, from_node, encoded, inc_dec):
         i = self.transmit_indices[from_node]
@@ -273,9 +277,9 @@ class NodeProcessor:
         digitized_arr[digitized_arr > self.mirror_bin] = (
             len(self.centers) - 1
         ) - digitized_arr[digitized_arr > self.mirror_bin]
-        self.cons_dig_mean = self.var_a * self.cons_dig_mean + (1 - self.var_a) * np.mean(
-            digitized_arr
-        )
+        self.cons_dig_mean = self.var_a * self.cons_dig_mean + (
+            1 - self.var_a
+        ) * np.mean(digitized_arr)
 
         # compute consensus quantized residual
         res_q = self.dedigitize(digitized) * self.consensus_enc_normalizer
@@ -293,7 +297,8 @@ class NodeProcessor:
 
         # encode
         encoded = self.hufencode(digitized)
-        return list(encoded), inc_dec
+        self.bit_buffer += len(list(hf._bits_from_bytes(encoded)))
+        return encoded, inc_dec
 
     def decodeConsensus(self, from_node, encoded, inc_dec):
         ind = self.receive_index_ranges[from_node]
@@ -442,15 +447,15 @@ class Network:
         self.localDualUpdate()
 
         node: NodeProcessor
-        for node in self.nodes.values():
-            node.res_local_var_hist.append(node.res_local_var.copy())
-            node.res_consensus_var_hist.append(node.res_consensus_var)
-            node.local_enc_normalizer_hist.append(node.local_enc_normalizer.copy())
-            node.local_dec_normalizer_hist.append(node.local_dec_normalizer.copy())
-            node.consensus_enc_normalizer_hist.append(node.consensus_enc_normalizer)
-            node.consensus_dec_normalizer_hist.append(
-                node.consensus_dec_normalizer.copy()
-            )
+        # for node in self.nodes.values():
+        #     node.local_dig_mean_hist.append(node.local_dig_mean.copy())
+        #     node.res_consensus_var_hist.append(node.res_consensus_var)
+        #     node.local_enc_normalizer_hist.append(node.local_enc_normalizer.copy())
+        #     node.local_dec_normalizer_hist.append(node.local_dec_normalizer.copy())
+        #     node.consensus_enc_normalizer_hist.append(node.consensus_enc_normalizer)
+        #     node.consensus_dec_normalizer_hist.append(
+        #         node.consensus_dec_normalizer.copy()
+        #     )
         if self.nodes[0].first:
             for node in self.nodes.values():
                 node.first = False

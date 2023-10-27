@@ -52,7 +52,9 @@ def _sim_dynamic_tracking(
     resample_nr_bins = codebook_entries
     resample_step = (resample_hist_range[1] - resample_hist_range[0]) / resample_nr_bins
     resample_bins = np.arange(
-        resample_hist_range[0], resample_hist_range[1] + resample_step / 2, resample_step
+        resample_hist_range[0],
+        resample_hist_range[1] + resample_step / 2,
+        resample_step,
     )
     resample_centers = (resample_bins[1:] + resample_bins[:-1]) / 2
     resample_bins_ = resample_bins.copy()
@@ -79,7 +81,7 @@ def _sim_dynamic_tracking(
     stepsize = 0.8  # local step size
     eta = 0.98  # recursive smoothing parameter (forgetting factor)
     M = nw.N  # number of channels
-    nr_samples = 150000  # number of input samples
+    nr_samples = 250000  # number of input samples
     partitions = 3  # number of IRs changes
     part_len = int(nr_samples / partitions)
     true_norms = [1.0] * M
@@ -105,7 +107,10 @@ def _sim_dynamic_tracking(
 
     # ####################################################################################
     # network setup
+    # def saveTransmissionHist(node1, node2, var_name, var):
+    #     pass
     nw.reset()
+    # nw.setOnTransmit(saveTransmissionHist)
     match alg:
         case "symbol_mean":
             increase_mult = 2
@@ -128,6 +133,7 @@ def _sim_dynamic_tracking(
                 smoothing,
             )
         case "quant_var":
+            smoothing = 0.5
             nw.setParameters(rho, stepsize, eta)
             nw.setCodeBook(
                 tree,
@@ -145,9 +151,9 @@ def _sim_dynamic_tracking(
     for k_admm_fq in range(0, nr_samples - 2 * L, hopsize):
         nw.step(noisy_signals[k_admm_fq : k_admm_fq + 2 * L, :])
         error = []
-        # var = 0
-        residual = 0
-        delta_consensus = 0
+        bits = 0
+        normalizer = 0
+        symbol_mean = 0
         for m in range(M):
             node: adfb.NodeProcessor = nw.nodes[m]
             error.append(
@@ -156,17 +162,33 @@ def _sim_dynamic_tracking(
                     hf[utils.getPart(k_admm_fq, part_len)][:, m, None],
                 )
             )
-            # TODO
-            if alg == "adaptive" and m == 0:
-                residual = node.old_res
-                delta_consensus = node.delta_consensus
-                # delta_local = node.delta_local
-        yield {"npm": np.mean(error), "res": residual, "delta_consensus": delta_consensus}
+            if m == 0:
+                match alg:
+                    case "quant_var":
+                        node: adfqv.NodeProcessor
+                        normalizer = node.consensus_enc_normalizer
+                        bits = node.bit_buffer
+                        node.bit_buffer = 0
+                    case "symbol_mean":
+                        node: adfsm.NodeProcessor
+                        normalizer = node.consensus_enc_normalizer
+                        symbol_mean = node.local_dig_mean[1]
+                        bits = node.bit_buffer
+                        node.bit_buffer = 0
+                    case "base":
+                        bits = 64 * 2 * 2
+
+        yield {
+            "npm": np.mean(error),
+            "normalizer": normalizer,
+            "symbol_mean": symbol_mean,
+            "bits": bits,
+        }
 
 
 def dynamic_tracking(runs, seed, num_processes):
     # This has to match the dictionary keys that simulate yields
-    return_value_names = ["npm", "res", "delta_consensus"]
+    return_value_names = ["npm", "normalizer", "symbol_mean", "bits"]
 
     # Define the tasks, which are basically all the parameter combinations for
     # which the algorithms are supposed to be run

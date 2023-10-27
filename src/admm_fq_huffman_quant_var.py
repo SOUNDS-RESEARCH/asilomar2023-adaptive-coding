@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Callable
-import huffman as hf
+from pythonutils import huffman as hf
 
 
 class NodeProcessor:
@@ -50,6 +50,7 @@ class NodeProcessor:
         self.dec_normalizer = None
 
         self.residuals = []
+        self.bit_buffer = 0
 
     def reset(self):
         # signal block
@@ -115,6 +116,7 @@ class NodeProcessor:
         self.res_local_var_hist = []
         self.res_consensus_var_hist = []
         self.residuals = []
+        self.bit_buffer = 0
 
     def setParameters(self, rho, mu, eta):
         self.rho = rho
@@ -184,7 +186,7 @@ class NodeProcessor:
 
     def hufencode(self, digitized):
         encoded = hf._encode(digitized, self.table)
-        return encoded
+        return list(encoded)
 
     def hufdecode(self, encoded):
         decoded = hf.huffman_decode(encoded, self.tree)
@@ -216,7 +218,8 @@ class NodeProcessor:
 
         # encode
         encoded = self.hufencode(digitized)
-        return list(encoded), 0
+        self.bit_buffer += len(list(hf._bits_from_bytes(encoded)))
+        return encoded, 0
 
     def decodeLocal(self, from_node, encoded, inc_dec):
         i = self.transmit_indices[from_node]
@@ -268,7 +271,8 @@ class NodeProcessor:
 
         # encode
         encoded = self.hufencode(digitized)
-        return list(encoded), 0
+        self.bit_buffer += len(list(hf._bits_from_bytes(encoded)))
+        return encoded, 0
 
     def decodeConsensus(self, from_node, encoded, inc_dec):
         ind = self.receive_index_ranges[from_node]
@@ -419,17 +423,17 @@ class Network:
         self.localDualUpdate()
 
         node: NodeProcessor
-        for node in self.nodes.values():
-            node.res_local_var_hist.append(node.local_dig_var_enc.copy())
-            node.res_local_var_hist.append(node.local_dig_var_dec.copy())
-            node.res_local_var_hist.append(node.cons_dig_var_enc)
-            node.res_local_var_hist.append(node.local_dig_var_dec.copy())
-            node.local_enc_normalizer_hist.append(node.local_enc_normalizer.copy())
-            node.local_dec_normalizer_hist.append(node.local_dec_normalizer.copy())
-            node.consensus_enc_normalizer_hist.append(node.consensus_enc_normalizer)
-            node.consensus_dec_normalizer_hist.append(
-                node.consensus_dec_normalizer.copy()
-            )
+        # for node in self.nodes.values():
+        #     node.res_local_var_hist.append(node.local_dig_var_enc.copy())
+        #     node.res_local_var_hist.append(node.local_dig_var_dec.copy())
+        #     node.res_local_var_hist.append(node.cons_dig_var_enc)
+        #     node.res_local_var_hist.append(node.local_dig_var_dec.copy())
+        #     node.local_enc_normalizer_hist.append(node.local_enc_normalizer.copy())
+        #     node.local_dec_normalizer_hist.append(node.local_dec_normalizer.copy())
+        #     node.consensus_enc_normalizer_hist.append(node.consensus_enc_normalizer)
+        #     node.consensus_dec_normalizer_hist.append(
+        #         node.consensus_dec_normalizer.copy()
+        #     )
         if self.nodes[0].first:
             for node in self.nodes.values():
                 node.first = False
