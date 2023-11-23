@@ -176,7 +176,7 @@ def _sim_dynamic_tracking(
                         bits = node.bit_buffer
                         node.bit_buffer = 0
                     case "base":
-                        bits = 64 * 2 * 2
+                        bits = 64 * 2 * 2 * L
 
         yield {
             "npm": np.mean(error),
@@ -196,7 +196,7 @@ def dynamic_tracking(runs, seed, num_processes):
     Ls = [16]
     add_zeross = [True, False]
     SNRs = [10, 30, 50, 70]
-    codebook_entriess = [5, 7, 11, 21]
+    codebook_entriess = [3, 5, 7, 11, 21]
 
     tasks = [
         {
