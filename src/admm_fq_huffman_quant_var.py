@@ -214,7 +214,7 @@ class NodeProcessor:
         self.xy_q[ind] = self.xy_q[ind] + res_q * self.local_enc_normalizer[i]
 
         # determine scaling update for next frame
-        self.local_enc_normalizer[i] = self.local_dig_var_enc[i] / self.ref_var
+        self.local_enc_normalizer[i] = np.sqrt(self.local_dig_var_enc[i] / self.ref_var)
 
         # encode
         encoded = self.hufencode(digitized)
@@ -241,7 +241,7 @@ class NodeProcessor:
         )
 
         # determine scaling update for next frame
-        self.local_dec_normalizer[i] = self.local_dig_var_dec[i] / self.ref_var
+        self.local_dec_normalizer[i] = np.sqrt(self.local_dig_var_dec[i] / self.ref_var)
 
         return self.xy_r[:, i]
 
@@ -267,7 +267,7 @@ class NodeProcessor:
         self.z_l_q[ind] = self.z_l_q[ind] + res_q * self.consensus_enc_normalizer
 
         # determine scaling update for next frame
-        self.consensus_enc_normalizer = self.cons_dig_var_enc / self.ref_var
+        self.consensus_enc_normalizer = np.sqrt(self.cons_dig_var_enc / self.ref_var)
 
         # encode
         encoded = self.hufencode(digitized)
@@ -293,7 +293,9 @@ class NodeProcessor:
         self.z_l[ind] = self.z_l[ind] + res_q * self.consensus_dec_normalizer[i]
 
         # determine scaling update for next frame
-        self.consensus_dec_normalizer[i] = self.cons_dig_var_dec[i] / self.ref_var
+        self.consensus_dec_normalizer[i] = np.sqrt(
+            self.cons_dig_var_dec[i] / self.ref_var
+        )
 
         return self.z_l[ind]
 

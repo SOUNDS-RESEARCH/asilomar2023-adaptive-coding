@@ -82,7 +82,7 @@ def _sim_dynamic_tracking(
     eta = 0.98  # recursive smoothing parameter (forgetting factor)
     M = nw.N  # number of channels
     nr_samples = 250000  # number of input samples
-    partitions = 3  # number of IRs changes
+    partitions = 2  # number of IRs changes
     part_len = int(nr_samples / partitions)
     true_norms = [1.0] * M
     hopsize = L
@@ -194,7 +194,7 @@ def dynamic_tracking(runs, seed, num_processes):
     # which the algorithms are supposed to be run
     algs = ["base", "symbol_mean", "quant_var"]
     Ls = [16]
-    add_zeross = [True, False]
+    add_zeross = [False]
     SNRs = [10, 30, 50, 70]
     codebook_entriess = [3, 5, 7, 11, 21]
 
