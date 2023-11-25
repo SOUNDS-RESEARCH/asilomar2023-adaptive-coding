@@ -1,5 +1,4 @@
 import sys
-import static_convergence
 import dynamic_tracking
 import plot
 
