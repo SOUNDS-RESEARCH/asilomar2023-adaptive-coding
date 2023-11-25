@@ -20,21 +20,25 @@ def plot():
 
     Ls = [16]
     L = 16
-    add_zeross = [True, False]
+    add_zeross = [False]
     SNRs = [10, 30, 50, 70]
     codebook_entriess = [3, 5, 7, 11, 21]
-    q = pl.scan_csv(
-        "data/dynamic_tracking_*.csv",
-        dtypes={
-            "run_rn": pl.Int64,
-            "alg": pl.Utf8,
-            "series": pl.Int64,
-            "npm": pl.Float64,
-            "normalizer": pl.Float64,
-            "symbol_mean": pl.Float64,
-            "bits": pl.Int64,
-        },
-    ).with_columns((pl.col("npm").log10() * 20))
+    q = (
+        pl.scan_csv(
+            "data/dynamic_tracking_*.csv",
+            dtypes={
+                "run_rn": pl.Int64,
+                "alg": pl.Utf8,
+                "series": pl.Int64,
+                "npm": pl.Float64,
+                "normalizer": pl.Float64,
+                "symbol_mean": pl.Float64,
+                "bits": pl.Int64,
+            },
+        )
+        .with_columns((pl.col("npm").log10() * 20))
+        .fill_nan(None)
+    )
     textwidth = 245
     rel_height = 0.4
     linewidth = 1.2
@@ -48,7 +52,7 @@ def plot():
                         pl.col("add_zeros") == add_zeros,
                     )
                     .groupby("series", maintain_order=True)
-                    .agg(npm_db_m=pl.col("npm").median())
+                    .agg(npm_db_m=pl.col("npm").mean())
                     .take_every(plot_every)
                 )
                 q_symbol_mean = (
@@ -59,7 +63,7 @@ def plot():
                         pl.col("add_zeros") == add_zeros,
                     )
                     .groupby("series", maintain_order=True)
-                    .agg(npm_db_m=pl.col("npm").median())
+                    .agg(npm_db_m=pl.col("npm").mean())
                     .take_every(plot_every)
                 )
                 q_quant_var = (
@@ -70,7 +74,7 @@ def plot():
                         pl.col("add_zeros") == add_zeros,
                     )
                     .groupby("series", maintain_order=True)
-                    .agg(npm_db_m=pl.col("npm").median())
+                    .agg(npm_db_m=pl.col("npm").mean())
                     .take_every(plot_every)
                 )
 
@@ -149,7 +153,7 @@ def plot():
                         pl.col("add_zeros") == add_zeros,
                     )
                     .groupby("series", maintain_order=True)
-                    .agg(bits_m=pl.col("bits").median())
+                    .agg(bits_m=pl.col("bits").mean())
                     .take_every(plot_every)
                 )
                 q_symbol_mean = (
@@ -160,7 +164,7 @@ def plot():
                         pl.col("add_zeros") == add_zeros,
                     )
                     .groupby("series", maintain_order=True)
-                    .agg(bits_m=pl.col("bits").median())
+                    .agg(bits_m=pl.col("bits").mean())
                     .take_every(plot_every)
                 )
                 q_quant_var = (
@@ -171,7 +175,7 @@ def plot():
                         pl.col("add_zeros") == add_zeros,
                     )
                     .groupby("series", maintain_order=True)
-                    .agg(bits_m=pl.col("bits").median())
+                    .agg(bits_m=pl.col("bits").mean())
                     .take_every(plot_every)
                 )
 
@@ -292,10 +296,12 @@ def plot():
         q_npm_conv = (
             q.filter(pl.col("SNR") == SNR, pl.col("series").is_in(frames))
             .groupby(["alg", "codebook_entries"])
-            .agg(npm_conv=pl.col("npm").median())
+            .agg(npm_conv=pl.col("npm").mean())
         )
         data = q_npm_conv.collect()
-        fig, ax = plt.subplots(figsize=utils.set_size(textwidth, 1.0, (1, 1), rel_height))
+        fig, ax = plt.subplots(
+            figsize=utils.set_size(textwidth, 1.0, (1, 1), rel_height)
+        )
 
         plt.plot(
             np.arange(-2, 8),
