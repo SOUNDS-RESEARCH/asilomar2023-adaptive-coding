@@ -118,10 +118,12 @@ class NodeProcessor:
         self.residuals = []
         self.bit_buffer = 0
 
-    def setParameters(self, rho, mu, eta):
+    def setParameters(self, rho, mu, eta, lambd, p):
         self.rho = rho
         self.mu = mu
         self.eta = eta
+        self.lambd = lambd
+        self.p = p
 
     def setCodebook(
         self,
@@ -214,8 +216,8 @@ class NodeProcessor:
         self.xy_q[ind] = self.xy_q[ind] + res_q * self.local_enc_normalizer[i]
 
         # determine scaling update for next frame
-        self.local_enc_normalizer[i] = np.square(
-            self.local_dig_var_enc[i] / self.ref_var
+        self.local_enc_normalizer[i] = np.power(
+            self.local_dig_var_enc[i] / self.ref_var, self.p
         )
 
         # encode
@@ -243,8 +245,8 @@ class NodeProcessor:
         )
 
         # determine scaling update for next frame
-        self.local_dec_normalizer[i] = np.square(
-            self.local_dig_var_dec[i] / self.ref_var
+        self.local_dec_normalizer[i] = np.power(
+            self.local_dig_var_dec[i] / self.ref_var, self.p
         )
 
         return self.xy_r[:, i]
@@ -271,7 +273,9 @@ class NodeProcessor:
         self.z_l_q[ind] = self.z_l_q[ind] + res_q * self.consensus_enc_normalizer
 
         # determine scaling update for next frame
-        self.consensus_enc_normalizer = np.square(self.cons_dig_var_enc / self.ref_var)
+        self.consensus_enc_normalizer = np.power(
+            self.cons_dig_var_enc / self.ref_var, self.p
+        )
 
         # encode
         encoded = self.hufencode(digitized)
@@ -297,8 +301,8 @@ class NodeProcessor:
         self.z_l[ind] = self.z_l[ind] + res_q * self.consensus_dec_normalizer[i]
 
         # determine scaling update for next frame
-        self.consensus_dec_normalizer[i] = np.square(
-            self.cons_dig_var_dec[i] / self.ref_var
+        self.consensus_dec_normalizer[i] = np.power(
+            self.cons_dig_var_dec[i] / self.ref_var, self.p
         )
 
         return self.z_l[ind]
@@ -306,8 +310,15 @@ class NodeProcessor:
     def solveLocal(self):
         R = self.construct_Rxp()  # construct matrix R_x+
         self.R_xp_ = R if self.first else self.eta * self.R_xp_ + (1 - self.eta) * R
-        y = self.R_xp_ @ self.x + self.y + self.rho * (self.x - self.z_l)
-        V = 1 / (np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho)
+        y = (
+            self.R_xp_ @ self.x
+            + self.lambd * self.x
+            + self.y
+            + self.rho * (self.x - self.z_l)
+        )
+        V = 1 / (
+            np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho + self.lambd
+        )
         self.x = self.x - self.mu * V * y
         self.xy = self.rho * self.x + self.y
 
@@ -545,10 +556,10 @@ class Network:
         for node in self.nodes.values():
             node.updateDual()
 
-    def setParameters(self, rho, mu, eta):
+    def setParameters(self, rho, mu, eta, lambd, p):
         node: NodeProcessor
         for node in self.nodes.values():
-            node.setParameters(rho, mu, eta)
+            node.setParameters(rho, mu, eta, lambd, p)
 
     def setCodeBook(
         self,

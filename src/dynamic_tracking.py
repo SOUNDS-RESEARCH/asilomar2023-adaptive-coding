@@ -80,8 +80,9 @@ def _sim_dynamic_tracking(
     rho = 1  # ADMM penalty parameter
     stepsize = 0.8  # local step size
     eta = 0.98  # recursive smoothing parameter (forgetting factor)
+    lambd = 0.01  # regularisation of local problem
     M = nw.N  # number of channels
-    nr_samples = 250000  # number of input samples
+    nr_samples = 300000  # number of input samples
     partitions = 2  # number of IRs changes
     part_len = int(nr_samples / partitions)
     true_norms = [1.0] * M
@@ -118,8 +119,8 @@ def _sim_dynamic_tracking(
             delta_lim = 0.8
             inc_lim = 1 - delta_lim
             dec_lim = 1 + delta_lim
-            smoothing = 0.5
-            nw.setParameters(rho, stepsize, eta)
+            smoothing = 0.6
+            nw.setParameters(rho, stepsize, eta, lambd)
             nw.setCodeBook(
                 tree,
                 table,
@@ -133,8 +134,9 @@ def _sim_dynamic_tracking(
                 smoothing,
             )
         case "quant_var":
-            smoothing = 0.5
-            nw.setParameters(rho, stepsize, eta)
+            smoothing = 0.6
+            p = 2
+            nw.setParameters(rho, stepsize, eta, lambd, p)
             nw.setCodeBook(
                 tree,
                 table,
@@ -144,7 +146,7 @@ def _sim_dynamic_tracking(
                 smoothing,
             )
         case "base":
-            nw.setParameters(rho, stepsize, eta, 1, 0.0)
+            nw.setParameters(rho, stepsize, eta, 1, 0.0, lambd)
         case _:
             raise Exception(f"Unknown algorithm type {alg}")
 
@@ -196,7 +198,7 @@ def dynamic_tracking(runs, seed, num_processes):
     Ls = [16]
     add_zeross = [False]
     SNRs = [10, 30, 50, 70]
-    codebook_entriess = [3, 5, 7, 11, 21]
+    codebook_entriess = [3, 7, 21, 51]
 
     tasks = [
         {

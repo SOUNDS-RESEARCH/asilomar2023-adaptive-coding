@@ -135,12 +135,13 @@ class NodeProcessor:
         self.delta_consensus_vardiff_hist = []
         self.residuals = []
 
-    def setParameters(self, rho, mu, eta, decimals, multiplier):
+    def setParameters(self, rho, mu, eta, decimals, multiplier, lambd):
         self.rho = rho
         self.mu = mu
         self.eta = eta
         self.decimals = decimals
         self.multiplier = multiplier
+        self.lambd = lambd
 
     def setDeltas(
         self,
@@ -216,8 +217,15 @@ class NodeProcessor:
     def solveLocal(self):
         R = self.construct_Rxp()  # construct matrix R_x+
         self.R_xp_ = R if self.first else self.eta * self.R_xp_ + (1 - self.eta) * R
-        y = self.R_xp_ @ self.x + self.y + self.rho * (self.x - self.z_l)
-        V = 1 / (np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho)
+        y = (
+            self.R_xp_ @ self.x
+            + self.lambd * self.x
+            + self.y
+            + self.rho * (self.x - self.z_l)
+        )
+        V = 1 / (
+            np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho + self.lambd
+        )
         self.x = self.x - self.mu * V * y
         self.xy = self.rho * self.x + self.y
 
@@ -452,7 +460,7 @@ class Network:
         for node in self.nodes.values():
             node.updateDual()
 
-    def setParameters(self, rho, mu, eta, global_ds, q_step):
+    def setParameters(self, rho, mu, eta, global_ds, q_step, lambd):
         self.global_ds = global_ds
         if q_step == 0.0:
             self.decimals = np.inf
@@ -463,7 +471,7 @@ class Network:
 
         node: NodeProcessor
         for node in self.nodes.values():
-            node.setParameters(rho, mu, eta, self.decimals, self.multiplier)
+            node.setParameters(rho, mu, eta, self.decimals, self.multiplier, lambd)
 
     def setDeltas(
         self,

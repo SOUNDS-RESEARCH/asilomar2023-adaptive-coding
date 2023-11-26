@@ -122,10 +122,11 @@ class NodeProcessor:
         self.residuals = []
         self.bit_buffer = 0
 
-    def setParameters(self, rho, mu, eta):
+    def setParameters(self, rho, mu, eta, lambd):
         self.rho = rho
         self.mu = mu
         self.eta = eta
+        self.lambd = lambd
 
     def setCodebook(
         self,
@@ -324,8 +325,15 @@ class NodeProcessor:
     def solveLocal(self):
         R = self.construct_Rxp()  # construct matrix R_x+
         self.R_xp_ = R if self.first else self.eta * self.R_xp_ + (1 - self.eta) * R
-        y = self.R_xp_ @ self.x + self.y + self.rho * (self.x - self.z_l)
-        V = 1 / (np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho)
+        y = (
+            self.R_xp_ @ self.x
+            + self.lambd * self.x
+            + self.y
+            + self.rho * (self.x - self.z_l)
+        )
+        V = 1 / (
+            np.diag(self.R_xp_).reshape(self.N * self.L, 1) + self.rho + self.lambd
+        )
         self.x = self.x - self.mu * V * y
         self.xy = self.rho * self.x + self.y
 
@@ -561,10 +569,10 @@ class Network:
         for node in self.nodes.values():
             node.updateDual()
 
-    def setParameters(self, rho, mu, eta):
+    def setParameters(self, rho, mu, eta, lambd):
         node: NodeProcessor
         for node in self.nodes.values():
-            node.setParameters(rho, mu, eta)
+            node.setParameters(rho, mu, eta, lambd)
 
     def setCodeBook(
         self,
