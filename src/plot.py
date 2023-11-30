@@ -792,30 +792,34 @@ def plot():
     fig, ax = plt.subplots(figsize=utils.set_size(textwidth, 1.0, (1, 1), rel_height))
     # plt.plot(X_axis, np.ones_like(X_axis), "k--")
 
-    plt.bar(
-        X_axis - 0.2,
-        data.filter(pl.col("alg") == "symbol_mean")
-        .groupby("codebook_entries")
-        .agg(bits_s=pl.col("bits_s").mean())
-        .sort("codebook_entries")["bits_s"]
-        / max_bitrate
-        / L,
-        0.4,
-        label="SM",
-        hatch=r"//",
-    )
-    plt.bar(
-        X_axis + 0.2,
-        data.filter(pl.col("alg") == "quant_var")
-        .groupby("codebook_entries")
-        .agg(bits_s=pl.col("bits_s").mean())
-        .sort("codebook_entries")["bits_s"]
-        / max_bitrate
-        / L,
-        0.4,
-        label="QV",
-        hatch=r"\\",
-    )
+    # plt.bar(
+    #     X_axis - 0.2,
+    #     data.filter(pl.col("alg") == "symbol_mean")
+    #     .groupby("codebook_entries")
+    #     .agg(bits_s=pl.col("bits_s").mean())
+    #     .sort("codebook_entries")["bits_s"]
+    #     / max_bitrate
+    #     / L,
+    #     0.4,
+    #     label="SM",
+    #     hatch=r"//",
+    # )
+    styles = ["||||", "----", "////", "\\\\\\\\"]
+    offset = -0.3
+    for SNR in SNRs:
+        plt.bar(
+            X_axis + offset,
+            data.filter(pl.col("alg") == "quant_var", pl.col("SNR") == SNR)
+            .groupby("codebook_entries")
+            .agg(bits_s=pl.col("bits_s").mean())
+            .sort("codebook_entries")["bits_s"]
+            / max_bitrate
+            / L,
+            0.2,
+            label=f"{SNR}dB",
+            hatch=styles.pop(0),
+        )
+        offset += 0.2
     plt.xticks(X_axis, codebook_entriess, fontsize=6)
     plt.yticks(fontsize=6)
     plt.legend(fontsize=6)
