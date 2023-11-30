@@ -267,154 +267,154 @@ def plot():
     #             plt.close()
 
     # # ####################################################################################
-    # fig, axs = plt.subplots(3, 1, figsize=utils.set_size(textwidth, 1.0, (1, 1), 1.0))
-    # sel_SNRs = [10, 50]
-    # sel_codebook_entries = [3, 21]
-    # sel_xlim = (0, 18000)
-    # markers_ = ["+", "x", "v", "<", ">", "s"]
-    # base_markers_ = ["o", "s"]
-    # # markers_.reverse()
-    # markersize = 3
+    fig, axs = plt.subplots(3, 1, figsize=utils.set_size(textwidth, 1.0, (1, 1), 1.0))
+    sel_SNRs = [10, 50]
+    sel_codebook_entries = [3, 21]
+    sel_xlim = (0, 18000)
+    markers_ = ["+", "x", "v", "<", ">", "s"]
+    base_markers_ = ["o", "s"]
+    # markers_.reverse()
+    markersize = 3
 
-    # markers = markers_.copy()
-    # base_markers = base_markers_.copy()
-    # markeverystep = 5
-    # for SNR in sel_SNRs:
-    #     for codebook_entries in sel_codebook_entries:
-    #         q_quant_var = (
-    #             q.filter(
-    #                 pl.col("alg") == "quant_var",
-    #                 pl.col("SNR") == SNR,
-    #                 pl.col("codebook_entries") == codebook_entries,
-    #                 pl.col("add_zeros") == False,
-    #             )
-    #             .groupby("series", maintain_order=True)
-    #             .agg(bits_m=pl.col("bits").median())
-    #             .take_every(plot_every)
-    #         )
-    #         data = q_quant_var.collect()
-    #         (line,) = axs[2].plot(
-    #             data["series"],
-    #             data["bits_m"],
-    #             label=f"({SNR}dB, {codebook_entries})",
-    #             markersize=markersize,
-    #             markevery=(markeverystep := markeverystep + 10, 50),
-    #             alpha=1,
-    #             linewidth=linewidth,
-    #             marker=markers.pop(0),
-    #         )
+    markers = markers_.copy()
+    base_markers = base_markers_.copy()
+    markeverystep = 5
+    for SNR in sel_SNRs:
+        for codebook_entries in sel_codebook_entries:
+            q_quant_var = (
+                q.filter(
+                    pl.col("alg") == "quant_var",
+                    pl.col("SNR") == SNR,
+                    pl.col("codebook_entries") == codebook_entries,
+                    pl.col("add_zeros") == False,
+                )
+                .groupby("series", maintain_order=True)
+                .agg(bits_m=pl.col("bits").median())
+                .take_every(plot_every)
+            )
+            data = q_quant_var.collect()
+            (line,) = axs[2].plot(
+                data["series"],
+                data["bits_m"],
+                label=f"({SNR}dB, {codebook_entries})",
+                markersize=markersize,
+                markevery=(markeverystep := markeverystep + 10, 50),
+                alpha=1,
+                linewidth=linewidth,
+                marker=markers.pop(0),
+            )
 
-    # axs[2].grid()
-    # axs[2].set_xlabel(r"Frame $k$")
-    # axs[2].tick_params(axis="both", labelsize=6)
-    # axs[2].set_ylabel(r"$R^{(k)}$ [bits]")
-    # axs[2].set_ylim(50, 400)
-    # axs[2].set_xlim(sel_xlim)
+    axs[2].grid()
+    axs[2].set_xlabel(r"Frame $k$")
+    axs[2].tick_params(axis="both", labelsize=6)
+    axs[2].set_ylabel(r"$R^{(k)}$ [bits]")
+    axs[2].set_ylim(50, 400)
+    axs[2].set_xlim(sel_xlim)
 
-    # markers = markers_.copy()
-    # base_markers = base_markers_.copy()
-    # markeverystep = 5
-    # for SNR in sel_SNRs:
-    #     for codebook_entries in sel_codebook_entries:
-    #         q_quant_var = (
-    #             q.filter(
-    #                 pl.col("alg") == "quant_var",
-    #                 pl.col("SNR") == SNR,
-    #                 pl.col("codebook_entries") == codebook_entries,
-    #                 pl.col("add_zeros") == False,
-    #             )
-    #             .groupby("series", maintain_order=True)
-    #             .agg(normalizer_m=pl.col("normalizer").median())
-    #             .take_every(plot_every)
-    #         )
-    #         data = q_quant_var.collect()
-    #         (line,) = axs[1].plot(
-    #             data["series"],
-    #             data["normalizer_m"],
-    #             label=f"({SNR}dB, {codebook_entries})",
-    #             markersize=markersize,
-    #             markevery=(markeverystep := markeverystep + 10, 50),
-    #             alpha=1,
-    #             linewidth=linewidth,
-    #             marker=markers.pop(0),
-    #         )
-    # axs[1].grid()
-    # axs[1].set_ylabel(r"$\delta^{(k)}$")
-    # axs[1].set_ylim(1e-3, 10)
-    # axs[1].set_xlim(sel_xlim)
-    # axs[1].set_yscale("log")
-    # axs[1].tick_params(axis="both", labelsize=6)
-    # axs[1].set_xticklabels([])
+    markers = markers_.copy()
+    base_markers = base_markers_.copy()
+    markeverystep = 5
+    for SNR in sel_SNRs:
+        for codebook_entries in sel_codebook_entries:
+            q_quant_var = (
+                q.filter(
+                    pl.col("alg") == "quant_var",
+                    pl.col("SNR") == SNR,
+                    pl.col("codebook_entries") == codebook_entries,
+                    pl.col("add_zeros") == False,
+                )
+                .groupby("series", maintain_order=True)
+                .agg(normalizer_m=pl.col("normalizer").median())
+                .take_every(plot_every)
+            )
+            data = q_quant_var.collect()
+            (line,) = axs[1].plot(
+                data["series"],
+                data["normalizer_m"],
+                label=f"({SNR}dB, {codebook_entries})",
+                markersize=markersize,
+                markevery=(markeverystep := markeverystep + 10, 50),
+                alpha=1,
+                linewidth=linewidth,
+                marker=markers.pop(0),
+            )
+    axs[1].grid()
+    axs[1].set_ylabel(r"$\delta^{(k)}$")
+    axs[1].set_ylim(1e-3, 10)
+    axs[1].set_xlim(sel_xlim)
+    axs[1].set_yscale("log")
+    axs[1].tick_params(axis="both", labelsize=6)
+    axs[1].set_xticklabels([])
 
-    # markers = markers_.copy()
-    # base_markers = base_markers_.copy()
-    # markeverystep = 5
-    # for SNR in sel_SNRs:
-    #     q_base = (
-    #         q.filter(
-    #             pl.col("alg") == "base",
-    #             pl.col("SNR") == SNR,
-    #             pl.col("add_zeros") == False,
-    #         )
-    #         .groupby("series", maintain_order=True)
-    #         .agg(npm_m=pl.col("npm").median())
-    #         .take_every(plot_every)
-    #     )
-    #     data = q_base.collect()
-    #     (line,) = axs[0].plot(
-    #         data["series"],
-    #         data["npm_m"],
-    #         label=f"({SNR}dB, base)",
-    #         color="k",
-    #         markersize=markersize,
-    #         markevery=(markeverystep := markeverystep + 10, 50),
-    #         alpha=1,
-    #         linewidth=linewidth,
-    #         marker=base_markers.pop(0),
-    #     )
-    #     for codebook_entries in sel_codebook_entries:
-    #         q_quant_var = (
-    #             q.filter(
-    #                 pl.col("alg") == "quant_var",
-    #                 pl.col("SNR") == SNR,
-    #                 pl.col("codebook_entries") == codebook_entries,
-    #                 pl.col("add_zeros") == False,
-    #             )
-    #             .groupby("series", maintain_order=True)
-    #             .agg(npm_m=pl.col("npm").median())
-    #             .take_every(plot_every)
-    #         )
-    #         data = q_quant_var.collect()
-    #         (line,) = axs[0].plot(
-    #             data["series"],
-    #             data["npm_m"],
-    #             label=f"({SNR}dB, {codebook_entries})",
-    #             markersize=markersize,
-    #             markevery=(markeverystep := markeverystep + 10, 50),
-    #             alpha=1,
-    #             linewidth=linewidth,
-    #             marker=markers.pop(0),
-    #         )
-    # axs[0].legend(
-    #     fontsize=6,
-    #     loc="upper center",
-    #     bbox_to_anchor=(0.5, 1.55),
-    #     ncol=3,
-    #     fancybox=True,
-    # )
-    # axs[0].grid()
-    # axs[0].set_ylabel(r"$\text{NPM}^{(k)}$ [dB]")
-    # axs[0].set_ylim(-70, 10)
-    # axs[0].tick_params(axis="both", labelsize=6)
-    # axs[0].set_xticklabels([])
-    # axs[0].set_xlim(sel_xlim)
-    # plt.tight_layout(pad=0.5)
-    # utils.savefig(
-    #     fig,
-    #     f"npm-normalizer-bits-over-time-comparison-qv",
-    #     format="pdf",
-    # )
-    # plt.close()
+    markers = markers_.copy()
+    base_markers = base_markers_.copy()
+    markeverystep = 5
+    for SNR in sel_SNRs:
+        q_base = (
+            q.filter(
+                pl.col("alg") == "base",
+                pl.col("SNR") == SNR,
+                pl.col("add_zeros") == False,
+            )
+            .groupby("series", maintain_order=True)
+            .agg(npm_m=pl.col("npm").median())
+            .take_every(plot_every)
+        )
+        data = q_base.collect()
+        (line,) = axs[0].plot(
+            data["series"],
+            data["npm_m"],
+            label=f"({SNR}dB, base)",
+            color="k",
+            markersize=markersize,
+            markevery=(markeverystep := markeverystep + 10, 50),
+            alpha=1,
+            linewidth=linewidth,
+            marker=base_markers.pop(0),
+        )
+        for codebook_entries in sel_codebook_entries:
+            q_quant_var = (
+                q.filter(
+                    pl.col("alg") == "quant_var",
+                    pl.col("SNR") == SNR,
+                    pl.col("codebook_entries") == codebook_entries,
+                    pl.col("add_zeros") == False,
+                )
+                .groupby("series", maintain_order=True)
+                .agg(npm_m=pl.col("npm").median())
+                .take_every(plot_every)
+            )
+            data = q_quant_var.collect()
+            (line,) = axs[0].plot(
+                data["series"],
+                data["npm_m"],
+                label=f"({SNR}dB, {codebook_entries})",
+                markersize=markersize,
+                markevery=(markeverystep := markeverystep + 10, 50),
+                alpha=1,
+                linewidth=linewidth,
+                marker=markers.pop(0),
+            )
+    axs[0].legend(
+        fontsize=6,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.55),
+        ncol=3,
+        fancybox=True,
+    )
+    axs[0].grid()
+    axs[0].set_ylabel(r"$\text{NPM}^{(k)}$ [dB]")
+    axs[0].set_ylim(-70, 10)
+    axs[0].tick_params(axis="both", labelsize=6)
+    axs[0].set_xticklabels([])
+    axs[0].set_xlim(sel_xlim)
+    plt.tight_layout(pad=0.5)
+    utils.savefig(
+        fig,
+        f"npm-normalizer-bits-over-time-comparison-qv",
+        format="pdf",
+    )
+    plt.close()
 
     # # ####################################################################################
     # fig, axs = plt.subplots(3, 1, figsize=utils.set_size(textwidth, 1.0, (1, 1), 1.0))
