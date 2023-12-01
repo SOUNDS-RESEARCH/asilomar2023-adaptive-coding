@@ -837,18 +837,18 @@ def plot():
     styles = ["||||", "----", "////", "\\\\\\\\"]
     offset = -0.3
     X_axis = np.arange(len(SNRs))
-    # for i, codebook_entries in enumerate(codebook_entriess):
-    for i, codebook_entries in enumerate([3, 7, 11, 21]):
+    for i, SNR in enumerate(SNRs):
         q_npm_conv = (
             q.filter(
-                pl.col("codebook_entries") == codebook_entries,
+                # pl.col("codebook_entries") == codebook_entries,
+                pl.col("SNR") == SNR,
                 pl.col("series").is_in(frames),
             )
-            .groupby(["alg", "SNR"])
+            .groupby(["alg"])
             .agg(npm_conv=pl.col("npm").median())
         )
         data = q_npm_conv.collect()
-        print(data)
+        # print(data)
         plt.plot(
             [i - 0.45, i + 0.45],
             [data.filter(pl.col("alg") == "base")["npm_conv"].mean()] * 2,
@@ -856,6 +856,18 @@ def plot():
             label="base" if i == 0 else "_",
             alpha=1,
         )
+    for codebook_entries in codebook_entriess:
+        q_npm_conv = (
+            q.filter(
+                pl.col("codebook_entries") == codebook_entries,
+                # pl.col("SNR") == SNR,
+                pl.col("series").is_in(frames),
+            )
+            .groupby(["alg", "SNR"])
+            .agg(npm_conv=pl.col("npm").median())
+        )
+        data = q_npm_conv.collect()
+        # for i, codebook_entries in enumerate([3, 7, 11, 21]):
         # (line,) = plt.plot(
         #     X_axis,
         #     data.filter(pl.col("alg") == "symbol_mean")
