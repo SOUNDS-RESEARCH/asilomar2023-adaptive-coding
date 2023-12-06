@@ -32,7 +32,8 @@ and its performance in various scenarios.
 - Clone this repository: `git clone https://github.com/SOUNDS-RESEARCH/asilomar2023-adaptive-coding --recurse-submodules`
 - Build the docker image: `docker build -t asilomar2023sim/simulations .`
 - Run the docker image: `docker run -it --rm -v "$(pwd)/.:/wd" asilomar2023sim/simulations <nr_mc_runs> <random_seed> <number_of_processes>`
-- The results can be found in the `data/` directory
+- The raw data results can be found in the `data/` directory
+- The plots can be found in the `plots/` directory
 
 ## SOUNDS
 This research work was carried out at the ESAT Laboratory of KU Leuven and the Section of AI and Sound of Aalborg University as part of the SOUNDS European Training Network.
